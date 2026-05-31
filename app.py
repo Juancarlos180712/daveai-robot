@@ -92,13 +92,16 @@ st.markdown("""
     @keyframes voice-wave {{ 0% {{ height: 6px; transform: scaleY(0.5); }} 100% {{ height: 55px; transform: scaleY(2.2); }} }}
     </style>
     """, unsafe_allow_html=True)
-
 # --- 4. STREAMLIT QUERY STRUCTURING ---
 # Capture strings piped dynamically out of the hidden JavaScript audio environment window
-query_params = st.query_transform(st.experimental_get_query_params())
-if "speech_payload" in query_params and query_params["speech_payload"][0] != st.session_state.voice_input_query:
-    st.session_state.voice_input_query = query_params["speech_payload"][0]
-    st.session_state.face_state = "THINKING"
+try:
+    # Use the modern, stable way to read URL query parameters in Streamlit
+    query_params = st.query_params
+    if "speech_payload" in query_params and query_params["speech_payload"] != st.session_state.voice_input_query:
+        st.session_state.voice_input_query = query_params["speech_payload"]
+        st.session_state.face_state = "THINKING"
+except Exception:
+    pass
 
 # --- 5. EXECUTE COGNITIVE PROCESSING (LLM BRIDGES) ---
 if st.session_state.face_state == "THINKING" and st.session_state.voice_input_query:
