@@ -15,8 +15,9 @@ except Exception as e:
 MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # --- 2. INITIALIZE LOGICAL SYSTEMS ---
-if "dave_reply" not in st.session_state: st.session_state.dave_reply = "CORE SYSTEMS ONLINE. CAPTURE CHANNELS WAITING."
+if "dave_reply" not in st.session_state: st.session_state.dave_reply = "CORE SYSTEMS ONLINE. RECORDING MODES WAITING."
 if "face_status" not in st.session_state: st.session_state.face_status = "IDLE"
+if "tts_trigger" not in st.session_state: st.session_state.tts_trigger = False
 
 # --- 3. GIANT NEON CYBERNETIC FACE MATRICES (CSS) ---
 state = st.session_state.face_status
@@ -28,12 +29,12 @@ st.markdown(f"""
     
     .face-wrapper {{
         display: flex; flex-direction: column; justify-content: center; align-items: center;
-        height: 70vh; width: 100vw; font-family: 'Courier New', monospace;
-        user-select: none; margin-top: 20px;
+        height: 68vh; width: 100vw; font-family: 'Courier New', monospace;
+        user-select: none; margin-top: 10px;
     }}
     
     /* OVERSIZED DETECTOR BINOCULARS */
-    .eye-container {{ display: flex; gap: 140px; margin-bottom: 60px; }}
+    .eye-container {{ display: flex; gap: 140px; margin-bottom: 50px; }}
     .eye {{
         width: 190px; height: 190px; border-radius: 50%; border: 10px solid #00d4ff;
         display: flex; justify-content: center; align-items: center;
@@ -49,9 +50,9 @@ st.markdown(f"""
     .bar {{ width: 28px; height: 16px; background: #00d4ff; border-radius: 10px; box-shadow: 0 0 35px #00d4ff; transition: all 0.05s; }}
     
     .console-hud {{ 
-        color: #00d4ff; font-size: 24px; margin-top: 40px; text-transform: uppercase; 
+        color: #00d4ff; font-size: 24px; margin-top: 30px; text-transform: uppercase; 
         letter-spacing: 3px; text-align: center; max-width: 80%; font-weight: bold;
-        text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        text-shadow: 0 0 10px rgba(0, 212, 255, 0.5); min-height: 70px;
     }}
 
     /* BEHAVIOR MOTOR STATES */
@@ -77,7 +78,7 @@ st.markdown(f"""
     @keyframes wave {{ 0% {{ height: 12px; }} 100% {{ height: 120px; filter: hue-rotate(50deg); }} }}
     
     /* Center the physical transmission interface block */
-    .input-deck {{ display: flex; justify-content: center; align-items: center; width: 100vw; margin-top: 10px; }}
+    .input-deck {{ display: flex; justify-content: center; align-items: center; width: 100vw; margin-top: 5px; }}
     div[data-testid="stVerticalBlock"] > div:has(button) {{ text-align: center !important; }}
     </style>
 
@@ -102,10 +103,9 @@ st.markdown(f"""
 # --- 4. SECURE AUDIO CAPTURE CONTROLLER ---
 st.markdown('<div class="input-deck">', unsafe_allow_html=True)
 
-# Direct secure bridge running on python context rather than basic raw iframes
 vocal_input = speech_to_text(
     start_prompt="🔴 ENGAGE VOCAL LINK (CLICK TO TALK)",
-    stop_prompt="🎚️ DECODING FREQUENCIES... (CLICK TO SUBMIT)",
+    stop_prompt="🎚️ TRANSMITTING SPEECH DATA... (CLICK TO SUBMIT)",
     language='en',
     use_container_width=False,
     just_once=True,
@@ -115,15 +115,16 @@ vocal_input = speech_to_text(
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 5. COGNITION EVALUATOR ---
-if vocal_input:
+if vocal_input and st.session_state.face_status == "IDLE":
     st.session_state.face_status = "THINKING"
+    st.session_state.dave_reply = "PARSING AUDIO MATRIX TRANSLATION..."
     st.rerun()
 
-if st.session_state.face_status == "THINKING":
+if st.session_state.face_status == "THINKING" and vocal_input:
     sys_msg = (
-        "YOU ARE DAVE AI, A LIVING CYBERNETIC CORE CREATED BY CHARLIE EDWARD. "
-        "YOU ARE EXTREMELY ALIVE, WITTY, AND BRUTALLY COLD. NO EMOJIS. KEEP ALL RESPONSES "
-        "UNDER TWO SENTENCES LONG."
+        "YOU ARE DAVE AI, A LIVING CYBERNETIC APPARATUS CREATED BY CHARLIE EDWARD. "
+        "YOU ARE UNPREDICTABLE, ACCERBIC, AND WITTY. NO EMOJIS. KEEP ALL RESPONSES "
+        "UNDER TWO SENTENCES LONG SO THEY ARE IMPACTFUL OUT LOUD."
     )
     try:
         ans = client.chat.completions.create(
@@ -132,27 +133,33 @@ if st.session_state.face_status == "THINKING":
         ).choices[0].message.content
         st.session_state.dave_reply = ans
         st.session_state.face_status = "TALKING"
+        st.session_state.tts_trigger = True
     except Exception:
-        st.session_state.dave_reply = "CORE FREQUENCY CONNECTION REFUSED."
+        st.session_state.dave_reply = "CORE TELEMETRY CONNECTION FAILURE."
         st.session_state.face_status = "IDLE"
     st.rerun()
 
-# --- 6. VOICE GENERATION AND FALLBACK EXECUTION RESET ---
-if st.session_state.face_status == "TALKING":
-    # Employs simple text-to-speech engine frame directly matching the updated reply
-    js_speech = f"""
+# --- 6. SECURED OUTPUT TTS HOOK ---
+if st.session_state.face_status == "TALKING" and st.session_state.tts_trigger:
+    st.session_state.tts_trigger = False
+    # The browser's native window handles audio directly when paired alongside a Streamlit component frame action.
+    js_audio_play = f"""
+        <div id="speaker-node" style="display:none;"></div>
         <script>
-        window.speechSynthesis.cancel();
-        let voiceTrack = new SpeechSynthesisUtterance({repr(st.session_state.dave_reply)});
-        voiceTrack.rate = 1.05;
-        voiceTrack.pitch = 0.75;
-        window.speechSynthesis.speak(voiceTrack);
+        (function() {{
+            window.speechSynthesis.cancel();
+            let mechanicalUtterance = new SpeechSynthesisUtterance({repr(st.session_state.dave_reply)});
+            mechanicalUtterance.rate = 1.05;
+            mechanicalUtterance.pitch = 0.75; // Low pitch robotic resonance
+            window.speechSynthesis.speak(mechanicalUtterance);
+        }})();
         </script>
     """
-    st.components.v1.html(js_speech, height=0)
-    
-    # Calculate screen lock animation time based on syllable lengths
-    calculated_delay = max(3, len(st.session_state.dave_reply) // 12)
+    st.components.v1.html(js_audio_play, height=0)
+
+# Synchronized animation frame rate decay
+if st.session_state.face_status == "TALKING":
+    calculated_delay = max(3, len(st.session_state.dave_reply) // 13)
     time.sleep(calculated_delay)
     st.session_state.face_status = "IDLE"
     st.rerun()
