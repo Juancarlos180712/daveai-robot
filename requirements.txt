@@ -1,0 +1,5 @@
+streamlit
+groq
+supabase
+opencv-python-headless
+numpy
