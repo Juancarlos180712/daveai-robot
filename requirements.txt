@@ -1,5 +1,4 @@
 streamlit
 groq
 supabase
-opencv-python-headless
-numpy
+streamlit-mic-recorder
