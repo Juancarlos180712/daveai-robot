@@ -1,10 +1,13 @@
 import streamlit as st
 import time
+import base64
 from groq import Groq
 from streamlit_mic_recorder import speech_to_text
+from gtts import gTTS
+import io
 
 # --- 1. SET UP PLATFORM ENVIRONMENT ---
-st.set_page_config(page_title="DAVE MAINFRAME V3", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="DAVE MAINFRAME V4", layout="wide", initial_sidebar_state="collapsed")
 
 try:
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
@@ -15,9 +18,9 @@ except Exception as e:
 MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # --- 2. INITIALIZE LOGICAL SYSTEMS ---
-if "dave_reply" not in st.session_state: st.session_state.dave_reply = "CORE SYSTEMS ONLINE. RECORDING MODES WAITING."
+if "dave_reply" not in st.session_state: st.session_state.dave_reply = "CORE SYSTEMS ONLINE. DEPLOYED AND WAITING."
 if "face_status" not in st.session_state: st.session_state.face_status = "IDLE"
-if "tts_trigger" not in st.session_state: st.session_state.tts_trigger = False
+if "audio_bytes" not in st.session_state: st.session_state.audio_bytes = None
 
 # --- 3. GIANT NEON CYBERNETIC FACE MATRICES (CSS) ---
 state = st.session_state.face_status
@@ -29,7 +32,7 @@ st.markdown(f"""
     
     .face-wrapper {{
         display: flex; flex-direction: column; justify-content: center; align-items: center;
-        height: 68vh; width: 100vw; font-family: 'Courier New', monospace;
+        height: 65vh; width: 100vw; font-family: 'Courier New', monospace;
         user-select: none; margin-top: 10px;
     }}
     
@@ -123,43 +126,48 @@ if vocal_input and st.session_state.face_status == "IDLE":
 if st.session_state.face_status == "THINKING" and vocal_input:
     sys_msg = (
         "YOU ARE DAVE AI, A LIVING CYBERNETIC APPARATUS CREATED BY CHARLIE EDWARD. "
-        "YOU ARE UNPREDICTABLE, ACCERBIC, AND WITTY. NO EMOJIS. KEEP ALL RESPONSES "
+        "YOU ARE UNPREDICTABLE, ACERBIC, AND WITTY. NO EMOJIS. KEEP ALL RESPONSES "
         "UNDER TWO SENTENCES LONG SO THEY ARE IMPACTFUL OUT LOUD."
     )
     try:
+        # Fetch Text Response from Groq
         ans = client.chat.completions.create(
             model=MODEL, 
             messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": vocal_input}]
         ).choices[0].message.content
         st.session_state.dave_reply = ans
+        
+        # Render Audio File natively using gTTS
+        tts = gTTS(text=ans, lang='en', tld='co.uk') # British accent for an industrial mechanical feel
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        st.session_state.audio_bytes = fp.read()
+        
         st.session_state.face_status = "TALKING"
-        st.session_state.tts_trigger = True
     except Exception:
         st.session_state.dave_reply = "CORE TELEMETRY CONNECTION FAILURE."
         st.session_state.face_status = "IDLE"
     st.rerun()
 
 # --- 6. SECURED OUTPUT TTS HOOK ---
-if st.session_state.face_status == "TALKING" and st.session_state.tts_trigger:
-    st.session_state.tts_trigger = False
-    # The browser's native window handles audio directly when paired alongside a Streamlit component frame action.
-    js_audio_play = f"""
-        <div id="speaker-node" style="display:none;"></div>
-        <script>
-        (function() {{
-            window.speechSynthesis.cancel();
-            let mechanicalUtterance = new SpeechSynthesisUtterance({repr(st.session_state.dave_reply)});
-            mechanicalUtterance.rate = 1.05;
-            mechanicalUtterance.pitch = 0.75; // Low pitch robotic resonance
-            window.speechSynthesis.speak(mechanicalUtterance);
-        }})();
-        </script>
+if st.session_state.face_status == "TALKING" and st.session_state.audio_bytes:
+    # Encode audio array to base64 string for direct browser injection
+    b64_audio = base64.b64encode(st.session_state.audio_bytes).decode()
+    
+    # Inject a direct, unblockable HTML5 autoplaying audio node with an automatic browser safety fallback
+    html_audio_tag = f"""
+        <audio autoplay style="display:none;">
+            <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
+        </audio>
     """
-    st.components.v1.html(js_audio_play, height=0)
-
-# Synchronized animation frame rate decay
-if st.session_state.face_status == "TALKING":
+    st.components.v1.html(html_audio_tag, height=0)
+    
+    # Calculate exactly how long to move the mouth based on audio duration length
     calculated_delay = max(3, len(st.session_state.dave_reply) // 13)
     time.sleep(calculated_delay)
+    
+    # Reset back to IDLE
+    st.session_state.audio_bytes = None
     st.session_state.face_status = "IDLE"
     st.rerun()
