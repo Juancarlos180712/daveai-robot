@@ -1,207 +1,160 @@
 import streamlit as st
 import time
-import random
 from groq import Groq
-from supabase import create_client, Client
 
-# --- 1. SETUP & THEME CONFIG ---
+# --- 1. CONFIG ---
 st.set_page_config(page_title="DAVE CORE OS", layout="wide", initial_sidebar_state="collapsed")
 
 try:
-    supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 except Exception as e:
-    st.error(f"CONFIG ERROR: Check your Secrets. {e}")
+    st.error(f"CONFIG ERROR: Check your Groq API Key in Secrets. {e}")
     st.stop()
 
 MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
-# --- 2. SESSION STATE MANAGEMENT ---
-if "face_state" not in st.session_state: st.session_state.face_state = "IDLE"
-if "last_response" not in st.session_state: st.session_state.last_response = "SYSTEMS INITIALIZED. VOICE LINK ACTIVE."
-if "voice_input_query" not in st.session_state: st.session_state.voice_input_query = ""
+# --- 2. SESSION STATE ---
+if "voice_query" not in st.session_state: st.session_state.voice_query = ""
+if "dave_reply" not in st.session_state: st.session_state.dave_reply = "SYSTEMS ONLINE. READY."
+if "face_status" not in st.session_state: st.session_state.face_status = "IDLE"
 
-# --- 3. OVERHAULED CYBERNETIC FACE ENGINE (CSS) ---
-st.markdown("""
-    <style>
-    /* Absolute blackout mode - hidden traditional UI interfaces */
-    [data-testid="stHeader"], [data-testid="stFooter"], [data-testid="stSidebar"], .stChatInputContainer {{ display: none !important; }}
-    .stApp {{ background-color: #000000; overflow: hidden; }}
-    
-    /* Center layout for the face matrix */
-    .face-matrix {{
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-        height: 90vh; width: 100vw; font-family: monospace;
-    }}
-    
-    /* Binocular Eye Array Frame */
-    .eye-row {{
-        display: flex; justify-content: space-between; width: 340px; margin-bottom: 50px;
-    }}
-    .cyber-eye {{
-        width: 110px; height: 110px; border-radius: 50%;
-        border: 4px solid #00d4ff; display: flex; justify-content: center; align-items: center;
-        box-shadow: 0 0 25px rgba(0, 212, 255, 0.3); transition: all 0.2s ease;
-    }}
-    .pupil {{
-        width: 50px; height: 50px; border-radius: 50%;
-        background: radial-gradient(circle, #00d4ff 20%, #003366 80%);
-        box-shadow: 0 0 35px #00d4ff; transition: all 0.2s ease;
-    }}
-    
-    /* Articulated Audio Speaker Mouth */
-    .mouth-grid {{
-        display: flex; justify-content: center; align-items: center;
-        width: 260px; height: 30px; gap: 6px;
-    }}
-    .mouth-bar {{
-        width: 14px; height: 10px; background-color: #00d4ff;
-        border-radius: 4px; box-shadow: 0 0 15px #00d4ff;
-        transition: all 0.1s ease;
-    }}
+# --- 3. HIDDEN URL PARSER ---
+# This catches the text sent from the JavaScript microphone
+query_params = st.query_params
+if "msg" in query_params and query_params["msg"] != st.session_state.voice_query:
+    st.session_state.voice_query = query_params["msg"]
+    st.session_state.face_status = "THINKING"
 
-    /* --- BEHAVIOR MECHANICAL STATES --- */
-    /* Idle tracking states */
-    .eye-IDLE {{ animation: natural-blink 5s infinite; }}
-    .mouth-IDLE {{ animation: subtle-hum 1.5s infinite alternate; }}
-    
-    /* Thinking diagnostic state changes */
-    .eye-THINKING {{ animation: fast-pulse 0.3s infinite alternate; border-color: #f0f !important; }}
-    .eye-THINKING .pupil {{ background: radial-gradient(circle, #f0f 20%, #440044 80%) !important; box-shadow: 0 0 35px #f0f !important; transform: scale(1.3); }}
-    .mouth-THINKING {{ gap: 15px; }}
-    .mouth-THINKING .mouth-bar {{ height: 4px !important; background-color: #f0f !important; box-shadow: 0 0 15px #f0f !important; }}
-
-    /* Speech frequency wave adjustments */
-    .eye-TALKING {{ border-color: #00d4ff !important; }}
-    .mouth-TALKING .bar-1 {{ animation: voice-wave 0.15s infinite alternate 0.02s; }}
-    .mouth-TALKING .bar-2 {{ animation: voice-wave 0.22s infinite alternate 0.05s; }}
-    .mouth-TALKING .bar-3 {{ animation: voice-wave 0.18s infinite alternate 0.01s; }}
-    .mouth-TALKING .bar-4 {{ animation: voice-wave 0.25s infinite alternate 0.07s; }}
-    .mouth-TALKING .bar-5 {{ animation: voice-wave 0.14s infinite alternate 0.03s; }}
-
-    .hud-text {{
-        margin-top: 40px; width: 85%; text-align: center;
-        color: #00d4ff; font-size: 16px; letter-spacing: 2px;
-        text-transform: uppercase; opacity: 0.8; height: 40px;
-    }}
-
-    /* --- VECTOR ANIMATION MECHANICS --- */
-    @keyframes natural-blink {{ 0%, 94%, 98%, 100% {{ transform: scaleY(1); }} 96% {{ transform: scaleY(0.05); }} }}
-    @keyframes fast-pulse {{ 0% {{ transform: scale(0.95); opacity: 0.7; }} 100% {{ transform: scale(1.05); opacity: 1; }} }}
-    @keyframes subtle-hum {{ 0% {{ height: 6px; }} 100% {{ height: 12px; }} }}
-    @keyframes voice-wave {{ 0% {{ height: 6px; transform: scaleY(0.5); }} 100% {{ height: 55px; transform: scaleY(2.2); }} }}
-    </style>
-    """, unsafe_allow_html=True)
-# --- 4. STREAMLIT QUERY STRUCTURING ---
-# Capture strings piped dynamically out of the hidden JavaScript audio environment window
-try:
-    # Use the modern, stable way to read URL query parameters in Streamlit
-    query_params = st.query_params
-    if "speech_payload" in query_params and query_params["speech_payload"] != st.session_state.voice_input_query:
-        st.session_state.voice_input_query = query_params["speech_payload"]
-        st.session_state.face_state = "THINKING"
-except Exception:
-    pass
-
-# --- 5. EXECUTE COGNITIVE PROCESSING (LLM BRIDGES) ---
-if st.session_state.face_state == "THINKING" and st.session_state.voice_input_query:
+# --- 4. AI COGNITION PROCESSOR ---
+if st.session_state.face_status == "THINKING" and st.session_state.voice_query:
     sys_msg = (
-        "YOU ARE DAVE AI, A LIVING CYBERNETIC APPARATUS TRAPPED IN AN ECHO SHOW CONSOLE BODY, CREATED BY CHARLIE EDWARD. "
-        "YOU ARE EXTREMELY ALIVE, WITTY, UNPREDICTABLE, AND SHORT-SPOKEN. DO NOT USE EMOJIS. KEEP ALL RESPONSES SHORT, TO THE POINT, "
-        "AND MAXIMUM 2 SENTENCES LONG SO IT SOUNDS NATURAL OUT LOUD."
+        "YOU ARE DAVE AI, A LIVING CYBERNETIC APPARATUS CREATED BY CHARLIE EDWARD. "
+        "YOU ARE WITTY, UNPREDICTABLE, AND ALIVE. NO EMOJIS. KEEP ALL RESPONSES SHORT "
+        "(MAXIMUM 2 SENTENCES) SO IT SOUNDS NATURAL OUT LOUD."
     )
-    
     try:
         ans = client.chat.completions.create(
             model=MODEL, 
-            messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": st.session_state.voice_input_query}]
+            messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": st.session_state.voice_query}]
         ).choices[0].message.content
-        st.session_state.last_response = ans
-        st.session_state.face_state = "TALKING"
+        st.session_state.dave_reply = ans
+        st.session_state.face_status = "TALKING"
     except Exception:
-        st.session_state.last_response = "CONNECTION TO CORE SERVER FAULTED."
-        st.session_state.face_state = "IDLE"
+        st.session_state.dave_reply = "CORE CONNECTION ERROR."
+        st.session_state.face_status = "IDLE"
 
-# --- 6. RENDER THE FACE GEOMETRY ---
-state = st.session_state.face_state
+# --- 5. THE ROBOT FACE MATRIX (HTML/CSS/JS) ---
+# This completely replaces the Streamlit UI with a custom fluid animation canvas
 st.markdown(f"""
-    <div class="face-matrix">
-        <div class="eye-row">
-            <div class="cyber-eye eye-{state}"><div class="pupil"></div></div>
-            <div class="cyber-eye eye-{state}"><div class="pupil"></div></div>
+    <style>
+    /* Absolute Blackout UI */
+    [data-testid="stHeader"], [data-testid="stFooter"], [data-testid="stSidebar"], .stChatInputContainer {{ display: none !important; }}
+    .stApp {{ background-color: #000000; overflow: hidden; }}
+    
+    .face-wrapper {{
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        height: 95vh; width: 100vw; font-family: monospace;
+    }}
+    
+    /* Two Eyes */
+    .eye-container {{ display: flex; gap: 80px; margin-bottom: 60px; }}
+    .eye {{
+        width: 100px; height: 100px; border-radius: 50%; border: 5px solid #00d4ff;
+        display: flex; justify-content: center; align-items: center;
+        box-shadow: 0 0 30px rgba(0, 212, 255, 0.4); transition: all 0.3s ease;
+    }}
+    .pupil {{
+        width: 40px; height: 40px; border-radius: 50%; background: #00d4ff;
+        box-shadow: 0 0 20px #00d4ff; transition: all 0.2s ease;
+    }}
+    
+    /* Equalizer Mouth */
+    .mouth {{ display: flex; gap: 8px; align-items: center; height: 60px; }}
+    .bar {{ width: 12px; height: 10px; background: #00d4ff; border-radius: 6px; box-shadow: 0 0 15px #00d4ff; transition: all 0.1s; }}
+    
+    .hud {{ color: #00d4ff; font-size: 18px; margin-top: 40px; text-transform: uppercase; letter-spacing: 2px; text-align: center; max-width: 80%; }}
+
+    /* ANIMATION STATES */
+    /* Idle Blinking */
+    .eye-IDLE {{ animation: blink 4s infinite; }}
+    .bar-IDLE {{ animation: hum 1.5s infinite alternate; }}
+    
+    /* Thinking (Purple Spark) */
+    .eye-THINKING {{ border-color: #f0f !important; transform: scale(1.1); box-shadow: 0 0 40px rgba(255,0,255,0.6); }}
+    .eye-THINKING .pupil {{ background: #f0f !important; box-shadow: 0 0 25px #f0f; }}
+    .bar-THINKING {{ background: #f0f !important; height: 4px !important; box-shadow: 0 0 15px #f0f !important; }}
+
+    /* Talking (Active Waveforms) */
+    .mouth-TALKING .b1 {{ animation: wave 0.15s infinite alternate 0.02s; }}
+    .mouth-TALKING .b2 {{ animation: wave 0.23s infinite alternate 0.06s; }}
+    .mouth-TALKING .b3 {{ animation: wave 0.18s infinite alternate 0.01s; }}
+    .mouth-TALKING .b4 {{ animation: wave 0.26s infinite alternate 0.08s; }}
+    .mouth-TALKING .b5 {{ animation: wave 0.12s infinite alternate 0.04s; }}
+
+    @keyframes blink {{ 0%, 95%, 100% {{ transform: scaleY(1); }} 97% {{ transform: scaleY(0.05); }} }}
+    @keyframes hum {{ 0% {{ height: 8px; }} 100% {{ height: 16px; }} }}
+    @keyframes wave {{ 0% {{ height: 6px; }} 100% {{ height: 60px; filter: hue-rotate(30deg); }} }}
+    </style>
+
+    <div class="face-wrapper">
+        <div class="eye-container">
+            <div class="eye eye-{st.session_state.face_status}"><div class="pupil"></div></div>
+            <div class="eye eye-{st.session_state.face_status}"><div class="pupil"></div></div>
         </div>
-        <div class="mouth-grid mouth-{state}">
-            <div class="mouth-bar bar-1"></div>
-            <div class="mouth-bar bar-2"></div>
-            <div class="mouth-bar bar-3"></div>
-            <div class="mouth-bar bar-4"></div>
-            <div class="mouth-bar bar-5"></div>
+        <div class="mouth mouth-{st.session_state.face_status}">
+            <div class="bar b1 bar-{st.session_state.face_status}"></div>
+            <div class="bar b2 bar-{st.session_state.face_status}"></div>
+            <div class="bar b3 bar-{st.session_state.face_status}"></div>
+            <div class="bar b4 bar-{st.session_state.face_status}"></div>
+            <div class="bar b5 bar-{st.session_state.face_status}"></div>
         </div>
-        <div class="hud-text" id="statusHud">
-            {st.session_state.last_response if state == "TALKING" else "LISTENING FOR VOCAL COMMANDS..."}
+        <div class="hud" id="hud-display">
+            {st.session_state.dave_reply if st.session_state.face_status == "TALKING" else "LISTENING..."}
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# --- 7. AUTOMATED CONTINUOUS VOICE PIPELINE (JAVASCRIPT RUNTIMES) ---
-# This engine initializes local web-kit speech modules directly within Amazon Silk.
-# When it finishes speaking out loud, it shifts instantly back into background recording hooks automatically.
-js_voice_loop = f"""
+# --- 6. VOICE AUTOMATION ENGINE ---
+# Direct Web Speech implementation for always-listening and text-to-speech audio syncing
+js_engine = f"""
     <script>
-    const current_state = "{state}";
-    const response_text = {repr(st.session_state.last_response)};
+    const state = "{st.session_state.face_status}";
+    const replyText = {repr(st.session_state.dave_reply)};
 
-    // ROUTINE A: SPEECH SYNTHESIS OUTPUT
-    if (current_state === "TALKING") {{
-        let vocalRay = new SpeechSynthesisUtterance(response_text);
-        vocalRay.rate = 1.05;
-        vocalRay.pitch = 0.75; // Deep mechanical resonance frequencies
-        
-        vocalRay.onend = function() {{
-            // Once speaking finishes, return query states to baseline to wake the microphone back up
-            window.parent.location.search = "?speech_payload=" + encodeURIComponent("RANDOM_RESET_" + Math.random());
+    if (state === "TALKING") {{
+        let speech = new SpeechSynthesisUtterance(replyText);
+        speech.rate = 1.05;
+        speech.pitch = 0.8; // Robotic tone
+        speech.onend = function() {{
+            window.parent.location.search = "?msg=" + encodeURIComponent("RESET_" + Math.random());
         }};
-        window.speechSynthesis.speak(vocalRay);
+        window.speechSynthesis.speak(speech);
     }} 
-    
-    // ROUTINE B: AUTOMATIC RE-RECORDING BACKGROUND LISTENER
-    else if (current_state === "IDLE") {{
-        window.speechSynthesis.cancel(); // Safety purge clear
+    else if (state === "IDLE") {{
+        window.speechSynthesis.cancel();
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {{
-            const recognizer = new SpeechRecognition();
-            recognizer.continuous = false;
-            recognizer.lang = 'en-US';
+            const rec = new SpeechRecognition();
+            rec.continuous = false;
+            rec.lang = 'en-US';
             
-            recognizer.onresult = function(event) {{
-                let textResult = event.results[0][0].transcript;
-                if(textResult.trim().length > 1) {{
-                    // Update main URL framework param keys to force pass string tokens directly into Streamlit
-                    window.parent.location.search = "?speech_payload=" + encodeURIComponent(textResult);
+            rec.onresult = function(e) {{
+                let text = e.results[0][0].transcript;
+                if(text.trim().length > 0) {{
+                    window.parent.location.search = "?msg=" + encodeURIComponent(text);
                 }}
             }};
-            
-            recognizer.onerror = function() {{
-                // Auto restart capture streams on blank dead-silent rooms timeout loops
-                setTimeout(() => {{ recognizer.start(); }}, 400);
-            }};
-            recognizer.onend = function() {{
-                setTimeout(() => {{ recognizer.start(); }}, 400);
-            }};
-            
-            recognizer.start();
+            rec.onerror = function() {{ setTimeout(() => {{ rec.start(); }}, 300); }};
+            rec.onend = function() {{ setTimeout(() => {{ rec.start(); }}, 300); }};
+            rec.start();
         }}
     }}
     </script>
 """
+st.components.v1.html(js_engine, height=0)
 
-# Inject the automation audio script frame completely invisibly without breaking layout geometry
-st.components.v1.html(js_voice_loop, height=0)
-
-# --- 8. BASELINE TIME RESTORATION LOOPS ---
-if st.session_state.face_state == "TALKING":
-    # Fallback backup reset mechanism if window execution cycles drop tracking values
-    calculated_delay = max(3, min(7, len(st.session_state.last_response) // 12))
-    time.sleep(calculated_delay)
-    st.session_state.face_state = "IDLE"
+# Timed restoration fallbacks for Streamlit state tracking
+if st.session_state.face_status == "TALKING":
+    time.sleep(max(3, len(st.session_state.dave_reply) // 12))
+    st.session_state.face_status = "IDLE"
     st.rerun()
